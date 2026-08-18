@@ -1,0 +1,1350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stack Lookup</title>
+<style>
+  :root {
+    --charcoal: #17191A;
+    --steel: #24272A;
+    --steel-light: #34383B;
+    --steel-border: #44484C;
+    --safety-yellow: #F2B705;
+    --safety-yellow-dim: #B8890A;
+    --safety-orange: #E2571C;
+    --paper: #ECE8E0;
+    --paper-dim: #9C9A94;
+    --mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--charcoal);
+    background-image:
+      radial-gradient(circle at 15% 8%, rgba(242,183,5,0.05), transparent 40%),
+      repeating-linear-gradient(135deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px, transparent 1px, transparent 12px);
+    color: var(--paper);
+    font-family: var(--sans);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 20px 16px 60px;
+  }
+
+  /* ---------- Header ---------- */
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    color: var(--safety-yellow);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .eyebrow::before {
+    content: "";
+    width: 8px; height: 8px;
+    background: var(--safety-yellow);
+    display: inline-block;
+    transform: rotate(45deg);
+  }
+  h1.title {
+    font-family: var(--sans);
+    font-weight: 900;
+    font-size: clamp(28px, 7vw, 40px);
+    letter-spacing: -0.01em;
+    text-transform: uppercase;
+    margin: 0 0 14px;
+    line-height: 0.95;
+  }
+  .hazard-bar {
+    height: 6px;
+    width: 100%;
+    background: repeating-linear-gradient(115deg, var(--safety-yellow) 0 14px, var(--charcoal) 14px 28px);
+    margin-bottom: 22px;
+    border-radius: 2px;
+    opacity: 0.9;
+  }
+
+  /* ---------- Card ---------- */
+  .card {
+    background: var(--steel);
+    border: 1px solid var(--steel-border);
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 18px;
+  }
+  .card-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--paper-dim);
+    margin-bottom: 10px;
+  }
+
+  .field { margin-bottom: 16px; }
+  .field:last-child { margin-bottom: 0; }
+  .field label {
+    display: block;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--paper-dim);
+    margin-bottom: 8px;
+  }
+  select {
+    width: 100%;
+    background: var(--charcoal);
+    border: 1.5px solid var(--steel-border);
+    color: var(--paper);
+    font-family: var(--sans);
+    font-size: 16px;
+    font-weight: 600;
+    padding: 15px 14px;
+    border-radius: 8px;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='9'%3E%3Cpath d='M1 1l6 6 6-6' stroke='%23F2B705' stroke-width='2' fill='none'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 16px center;
+    min-height: 52px;
+  }
+  select:disabled { opacity: 0.4; }
+  select:focus-visible {
+    outline: 2px solid var(--safety-yellow);
+    outline-offset: 1px;
+  }
+
+  input[type="text"], input[type="number"] {
+    width: 100%;
+    background: var(--charcoal);
+    border: 1.5px solid var(--steel-border);
+    color: var(--paper);
+    font-family: var(--sans);
+    font-size: 16px;
+    font-weight: 600;
+    padding: 15px 14px;
+    border-radius: 8px;
+    min-height: 52px;
+  }
+  input[type="text"]::placeholder, input[type="number"]::placeholder { color: var(--paper-dim); font-weight: 400; }
+  input[type="text"]:focus-visible, input[type="number"]:focus-visible {
+    outline: 2px solid var(--safety-yellow);
+    outline-offset: 1px;
+  }
+
+  .divider-or {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 18px 0;
+    color: var(--paper-dim);
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+  }
+  .divider-or::before, .divider-or::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--steel-border);
+  }
+
+  .btn-scan {
+    width: 100%;
+    background: transparent;
+    border: 1.5px dashed var(--steel-border);
+    color: var(--paper);
+    font-family: var(--sans);
+    font-weight: 700;
+    font-size: 15px;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    padding: 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    min-height: 52px;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .btn-scan:hover { border-color: var(--safety-yellow); background: rgba(242,183,5,0.06); }
+  .btn-scan:focus-visible { outline: 2px solid var(--safety-yellow); outline-offset: 2px; }
+  .btn-scan svg { vertical-align: -4px; margin-right: 8px; }
+
+  /* ---------- Result plate ---------- */
+  .plate-wrap {
+    position: relative;
+    animation: rise 0.35s ease;
+  }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .plate {
+    position: relative;
+    background: linear-gradient(180deg, #2B2F32, #202325);
+    border: 1px solid var(--steel-border);
+    border-radius: 10px;
+    padding: 26px 22px 22px;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.03);
+  }
+  .rivet {
+    position: absolute;
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #7a7d80, #2b2d2f 70%);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.6);
+  }
+  .rivet.tl { top: 10px; left: 10px; }
+  .rivet.tr { top: 10px; right: 10px; }
+  .rivet.bl { bottom: 10px; left: 10px; }
+  .rivet.br { bottom: 10px; right: 10px; }
+
+  .plate-sub {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    color: var(--paper-dim);
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .plate-headline {
+    font-family: var(--sans);
+    font-weight: 900;
+    text-transform: uppercase;
+    font-size: clamp(30px, 9vw, 46px);
+    line-height: 1;
+    letter-spacing: -0.01em;
+    color: var(--paper);
+    margin: 4px 0 6px;
+    -webkit-mask-image: repeating-linear-gradient(115deg, black 0px, black 7px, transparent 7px, transparent 9px);
+    mask-image: repeating-linear-gradient(115deg, black 0px, black 7px, transparent 7px, transparent 9px);
+  }
+  .plate-headline .accent { color: var(--safety-yellow); }
+  .plate-tag {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border-radius: 4px;
+    margin-top: 4px;
+    border: 1px solid var(--steel-border);
+    color: var(--paper-dim);
+  }
+
+  .caution {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    background: rgba(226,87,28,0.12);
+    border: 1px solid var(--safety-orange);
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin: 16px 0;
+  }
+  .caution svg { flex-shrink: 0; margin-top: 2px; }
+  .caution-text {
+    font-family: var(--sans);
+    font-weight: 700;
+    font-size: 13.5px;
+    color: #FFD9C4;
+    line-height: 1.4;
+    text-transform: uppercase;
+    letter-spacing: 0.01em;
+  }
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-top: 18px;
+  }
+  .stat {
+    background: var(--charcoal);
+    border: 1px solid var(--steel-border);
+    border-radius: 8px;
+    padding: 12px 10px;
+    text-align: center;
+  }
+  .stat-label {
+    font-family: var(--mono);
+    font-size: 9.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--paper-dim);
+    margin-bottom: 6px;
+  }
+  .stat-value {
+    font-family: var(--mono);
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--paper);
+  }
+
+  /* ---------- Stack diagram ---------- */
+  .stack-diagram {
+    margin-top: 20px;
+    border-top: 1px solid var(--steel-border);
+    padding-top: 16px;
+  }
+  .stack-diagram-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--paper-dim);
+    margin-bottom: 12px;
+  }
+  .level-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    margin-bottom: 6px;
+    background: var(--charcoal);
+    border: 1px solid var(--steel-border);
+  }
+  .level-row.current {
+    background: rgba(242,183,5,0.1);
+    border-color: var(--safety-yellow);
+  }
+  .level-num {
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--paper-dim);
+    width: 20px;
+    flex-shrink: 0;
+  }
+  .level-row.current .level-num { color: var(--safety-yellow); }
+  .level-info {
+    flex: 1;
+    font-family: var(--sans);
+    font-size: 13.5px;
+    font-weight: 600;
+  }
+  .level-weight {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--paper-dim);
+  }
+  .level-tag-you {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    color: var(--charcoal);
+    background: var(--safety-yellow);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-weight: 800;
+  }
+
+  .empty-note {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--paper-dim);
+    text-align: center;
+    padding: 30px 10px;
+    line-height: 1.6;
+  }
+  .empty-note .hi { color: var(--safety-yellow); }
+
+  footer {
+    text-align: center;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--paper-dim);
+    letter-spacing: 0.06em;
+    margin-top: 30px;
+    opacity: 0.7;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .plate-wrap { animation: none; }
+  }
+
+  /* ---------- Tabs ---------- */
+  .tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--steel-border);
+  }
+  .tab-btn {
+    flex: 1;
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    color: var(--paper-dim);
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-weight: 700;
+    padding: 12px 4px;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .tab-btn.active { color: var(--safety-yellow); border-bottom-color: var(--safety-yellow); }
+  .tab-btn:focus-visible { outline: 2px solid var(--safety-yellow); outline-offset: 2px; }
+
+  /* ---------- Checklist ---------- */
+  .check-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 13px 12px;
+    border-radius: 8px;
+    border: 1.5px solid var(--steel-border);
+    background: var(--charcoal);
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+  }
+  .check-row:last-child { margin-bottom: 0; }
+  .check-row.checked { border-color: var(--safety-yellow); background: rgba(242,183,5,0.08); }
+  .check-row input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--safety-yellow); flex-shrink: 0; }
+  .check-row-info { flex: 1; min-width: 0; }
+  .check-row-serial { font-family: var(--sans); font-weight: 700; font-size: 14.5px; overflow-wrap: anywhere; }
+  .check-row-meta { font-family: var(--mono); font-size: 11px; color: var(--paper-dim); margin-top: 2px; }
+
+  .btn-compute {
+    width: 100%;
+    background: var(--safety-yellow);
+    border: none;
+    color: var(--charcoal);
+    font-family: var(--sans);
+    font-weight: 800;
+    font-size: 15px;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    padding: 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    min-height: 52px;
+    margin-top: 4px;
+  }
+  .btn-compute:hover { background: #FFC72E; }
+  .btn-compute:focus-visible { outline: 2px solid var(--paper); outline-offset: 2px; }
+  .btn-compute:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ---------- Gauges ---------- */
+  .gauge-label {
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--paper-dim);
+    margin-bottom: 6px;
+  }
+  .gauge {
+    height: 10px;
+    background: var(--charcoal);
+    border: 1px solid var(--steel-border);
+    border-radius: 5px;
+    overflow: hidden;
+    margin-bottom: 12px;
+  }
+  .gauge-fill { height: 100%; background: linear-gradient(90deg, var(--safety-yellow-dim), var(--safety-yellow)); }
+
+  /* ---------- Truck cards ---------- */
+  .truck-card {
+    position: relative;
+    background: linear-gradient(180deg, #2B2F32, #202325);
+    border: 1px solid var(--steel-border);
+    border-radius: 10px;
+    padding: 20px 18px;
+    margin-bottom: 14px;
+  }
+  .truck-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 14px;
+  }
+  .truck-num {
+    font-family: var(--sans);
+    font-weight: 900;
+    text-transform: uppercase;
+    font-size: 22px;
+    letter-spacing: -0.01em;
+  }
+  .truck-type {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    color: var(--safety-yellow);
+    text-transform: uppercase;
+  }
+  .deck-label {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--paper-dim);
+    margin: 12px 0 6px;
+  }
+  .cargo-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 10px;
+    border-radius: 6px;
+    margin-bottom: 5px;
+    background: var(--charcoal);
+    border: 1px solid var(--steel-border);
+    font-family: var(--sans);
+    font-size: 13px;
+  }
+  .cargo-row .serial-tag {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--paper-dim);
+    flex-shrink: 0;
+  }
+  .cargo-row .piece-name { flex: 1; font-weight: 600; }
+  .cargo-row .piece-len { font-family: var(--mono); font-size: 12px; color: var(--paper-dim); }
+
+  .shipment-summary {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+  @media (min-width: 420px) {
+    .shipment-summary { grid-template-columns: repeat(4, 1fr); }
+  }
+
+  /* ---------- Inventory table ---------- */
+  .btn-outline {
+    width: 100%;
+    background: transparent;
+    border: 1.5px solid var(--steel-border);
+    color: var(--paper);
+    font-family: var(--sans);
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 0.02em;
+    padding: 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    min-height: 48px;
+  }
+  .btn-outline:hover { border-color: var(--safety-yellow); }
+  .btn-outline:focus-visible { outline: 2px solid var(--safety-yellow); outline-offset: 2px; }
+
+  .inv-count {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--paper-dim);
+    text-align: center;
+    margin: 10px 0;
+  }
+  .inv-table-wrap {
+    max-height: 360px;
+    overflow: auto;
+    border: 1px solid var(--steel-border);
+    border-radius: 8px;
+  }
+  table.inv-table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 10.5px; }
+  .inv-table th {
+    position: sticky; top: 0;
+    background: var(--steel);
+    color: var(--paper-dim);
+    text-align: left;
+    padding: 8px 7px;
+    border-bottom: 1px solid var(--steel-border);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 9.5px;
+    white-space: nowrap;
+  }
+  .inv-table td {
+    padding: 7px;
+    border-bottom: 1px solid var(--steel-border);
+    color: var(--paper);
+    white-space: nowrap;
+  }
+  .inv-table tr:nth-child(even) td { background: rgba(255,255,255,0.02); }
+
+  textarea#csvOutput {
+    width: 100%;
+    min-height: 90px;
+    background: var(--charcoal);
+    border: 1.5px solid var(--steel-border);
+    color: var(--paper-dim);
+    font-family: var(--mono);
+    font-size: 10.5px;
+    border-radius: 8px;
+    padding: 10px;
+    margin-top: 12px;
+    resize: vertical;
+  }
+  .copy-status {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--safety-yellow);
+    text-align: center;
+    margin-top: 6px;
+    min-height: 14px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">Material Handling</div>
+  <h1 class="title" id="pageTitle">Stack Lookup</h1>
+  <div class="hazard-bar"></div>
+
+  <div class="tabs">
+    <button class="tab-btn active" id="tabLookupBtn" data-tab="lookup">Stack Lookup</button>
+    <button class="tab-btn" id="tabOutboundBtn" data-tab="outbound">Outbound Planner</button>
+    <button class="tab-btn" id="tabAddBtn" data-tab="add">Add Inventory</button>
+  </div>
+
+  <div id="lookupView">
+    <div class="card">
+      <div class="card-label">Find a piece</div>
+      <div class="field">
+        <label for="systemSelect">System (Serial Number)</label>
+        <select id="systemSelect">
+          <option value="">Select a system…</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="pieceSelect">Piece</label>
+        <select id="pieceSelect" disabled>
+          <option value="">Select a system first…</option>
+        </select>
+      </div>
+      <div class="divider-or">or</div>
+      <button class="btn-scan" id="scanBtn">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F2B705" stroke-width="2"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 12h10"/></svg>
+        Scan Tag
+      </button>
+    </div>
+
+    <div id="resultArea"></div>
+  </div>
+
+  <div id="outboundView" style="display:none">
+    <div class="card">
+      <div class="card-label">Select systems shipping together</div>
+      <div id="systemChecklist"></div>
+    </div>
+    <button class="btn-compute" id="computeBtn" disabled>Compute Load Plan</button>
+    <div id="outboundResult" style="margin-top:16px"></div>
+  </div>
+
+  <div id="addView" style="display:none">
+    <div class="card">
+      <div class="card-label">New piece details</div>
+      <div class="field">
+        <label for="addSerial">Serial Number</label>
+        <input type="text" id="addSerial" list="serialList" placeholder="e.g. FOT03015F" autocomplete="off">
+        <datalist id="serialList"></datalist>
+      </div>
+      <div class="field">
+        <label for="addPart">Part Number</label>
+        <input type="text" id="addPart" placeholder="e.g. PN-12969" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="addPieceId">Piece ID</label>
+        <input type="text" id="addPieceId" placeholder="e.g. 3 of 6" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="addLength">Length (in)</label>
+        <input type="number" id="addLength" min="1" step="1" inputmode="numeric">
+      </div>
+      <div class="field">
+        <label for="addWidth">Width (in)</label>
+        <input type="number" id="addWidth" min="1" step="1" inputmode="numeric">
+      </div>
+      <div class="field">
+        <label for="addHeight">Height (in)</label>
+        <input type="number" id="addHeight" min="1" step="1" inputmode="numeric">
+      </div>
+      <div class="field">
+        <label for="addWeight">Weight (kg)</label>
+        <input type="number" id="addWeight" min="1" step="1" inputmode="numeric">
+      </div>
+      <div class="field">
+        <label for="addStackable">Stackable (Y/N)</label>
+        <select id="addStackable">
+          <option value="Y">Y &mdash; can be placed on top of another piece</option>
+          <option value="N">N &mdash; must be a base</option>
+        </select>
+      </div>
+      <div id="addError" class="caution-text" style="display:none; color:#FFD9C4; margin-bottom:14px;"></div>
+      <button class="btn-compute" id="saveBtn">Save Piece &amp; Compute Stack</button>
+    </div>
+    <div id="addResult"></div>
+
+    <button class="btn-outline" id="toggleInvBtn" style="margin-top:18px">View All Inventory</button>
+    <div id="invTableWrap" style="display:none; margin-top:14px">
+      <div class="inv-count" id="invCount"></div>
+      <div class="inv-table-wrap">
+        <table class="inv-table">
+          <thead>
+            <tr>
+              <th>Serial</th><th>Part</th><th>Piece</th><th>L</th><th>W</th><th>H</th>
+              <th>Wt(kg)</th><th>Stack?</th><th>Position</th>
+            </tr>
+          </thead>
+          <tbody id="invTableBody"></tbody>
+        </table>
+      </div>
+      <button class="btn-outline" id="copyCsvBtn" style="margin-top:12px">Copy as CSV</button>
+      <div class="copy-status" id="copyStatus"></div>
+      <textarea id="csvOutput" readonly></textarea>
+    </div>
+
+    <div style="text-align:center; margin-top:18px;">
+      <button id="resetBtn" style="background:none; border:none; color:var(--paper-dim); font-family:var(--mono); font-size:11px; letter-spacing:0.05em; text-decoration:underline; cursor:pointer;">Reset this device to original data</button>
+    </div>
+  </div>
+
+  <footer id="pageFooter">SAME SERIAL &middot; DECREASE WEIGHT UP &middot; STAY UNDER 240 IN</footer>
+</div>
+
+<script>
+const SEED_DATA = {"systems":{"FOT03015F":{"pieceIds":["1 of 6","2 of 6","3 of 6","4 of 6","5 of 6","6 of 6"],"stacks":[{"label":"Stack 1","width":90,"totalHeight":226,"totalWeight":5900,"members":[{"pieceId":"1 of 6","part":"PN-12969","weight":4300,"height":88,"level":1},{"pieceId":"6 of 6","part":"PN-12969","weight":950,"height":55,"level":2},{"pieceId":"4 of 6","part":"PN-12969","weight":650,"height":83,"level":3}]},{"label":"Stack 2","width":90,"totalHeight":104,"totalWeight":4060,"members":[{"pieceId":"2 of 6","part":"PN-12969","weight":3600,"height":70,"level":1},{"pieceId":"5 of 6","part":"PN-12969","weight":460,"height":34,"level":2}]},{"label":"Stack 3","width":48,"totalHeight":90,"totalWeight":300,"members":[{"pieceId":"3 of 6","part":"PN-12969","weight":300,"height":90,"level":1}]}]},"SCV4020-10.5-K":{"pieceIds":["1 of 2","2 of 2"],"stacks":[{"label":"Stack 1","width":90,"totalHeight":44,"totalWeight":520,"members":[{"pieceId":"1 of 2","part":"PN-60795","weight":520,"height":44,"level":1}]},{"label":"Stack 2","width":44,"totalHeight":65,"totalWeight":200,"members":[{"pieceId":"2 of 2","part":"PN-60795","weight":200,"height":65,"level":1}]}]},"MSCV84020XC3-M8H":{"pieceIds":["1 of 12","2 of 12","3 of 12","4 of 12","5 of 12","6 of 12","7 of 12","8 of 12","9 of 12","10 of 12","11 of 12","12 of 12"],"stacks":[{"label":"Stack 1","width":90,"totalHeight":157,"totalWeight":6870,"members":[{"pieceId":"1 of 12","part":"PN-13091","weight":5000,"height":101,"level":1},{"pieceId":"7 of 12","part":"PN-13091","weight":1870,"height":56,"level":2}]},{"label":"Stack 2","width":90,"totalHeight":205,"totalWeight":7000,"members":[{"pieceId":"2 of 12","part":"PN-13091","weight":4500,"height":101,"level":1},{"pieceId":"3 of 12","part":"PN-13091","weight":1800,"height":65,"level":2},{"pieceId":"9 of 12","part":"PN-13091","weight":700,"height":39,"level":3}]},{"label":"Stack 3","width":90,"totalHeight":221,"totalWeight":6450,"members":[{"pieceId":"5 of 12","part":"PN-13091","weight":3000,"height":80,"level":1},{"pieceId":"4 of 12","part":"PN-13091","weight":1750,"height":65,"level":2},{"pieceId":"8 of 12","part":"PN-13091","weight":1700,"height":76,"level":3}]},{"label":"Stack 4","width":90,"totalHeight":189,"totalWeight":5900,"members":[{"pieceId":"6 of 12","part":"PN-13091","weight":3000,"height":46,"level":1},{"pieceId":"12 of 12","part":"PN-13091","weight":1500,"height":55,"level":2},{"pieceId":"11 of 12","part":"PN-13091","weight":1400,"height":88,"level":3}]},{"label":"Stack 5","width":48,"totalHeight":90,"totalWeight":380,"members":[{"pieceId":"10 of 12","part":"PN-13091","weight":380,"height":90,"level":1}]}]},"MSCV83015XC3-M8H":{"pieceIds":["1 of 10","2 of 10","3 of 10","4 of 10","5 of 10","6 of 10","7 of 10","8 of 10","9 of 10","10 of 10"],"stacks":[{"label":"Stack 1","width":90,"totalHeight":237,"totalWeight":5700,"members":[{"pieceId":"1 of 10","part":"PN-13064","weight":4000,"height":100,"level":1},{"pieceId":"3 of 10","part":"PN-13064","weight":1300,"height":100,"level":2},{"pieceId":"5 of 10","part":"PN-13064","weight":400,"height":37,"level":3}]},{"label":"Stack 2","width":90,"totalHeight":155,"totalWeight":5200,"members":[{"pieceId":"2 of 10","part":"PN-13064","weight":4000,"height":79,"level":1},{"pieceId":"9 of 10","part":"PN-13064","weight":1200,"height":76,"level":2}]},{"label":"Stack 3","width":90,"totalHeight":166,"totalWeight":4100,"members":[{"pieceId":"4 of 10","part":"PN-13064","weight":3000,"height":75,"level":1},{"pieceId":"10 of 10","part":"PN-13064","weight":1100,"height":91,"level":2}]},{"label":"Stack 4","width":90,"totalHeight":48,"totalWeight":2200,"members":[{"pieceId":"8 of 10","part":"PN-13064","weight":2200,"height":48,"level":1}]},{"label":"Stack 5","width":90,"totalHeight":78,"totalWeight":2000,"members":[{"pieceId":"7 of 10","part":"PN-13064","weight":2000,"height":78,"level":1}]},{"label":"Stack 6","width":48,"totalHeight":91,"totalWeight":300,"members":[{"pieceId":"6 of 10","part":"PN-13064","weight":300,"height":91,"level":1}]}]},"P94020GXF100-ST":{"pieceIds":["1 of 3","2 of 3","3 of 3"],"stacks":[{"label":"Stack 1","width":90,"totalHeight":165,"totalWeight":4260,"members":[{"pieceId":"1 of 3","part":"PN-1921","weight":2400,"height":77,"level":1},{"pieceId":"3 of 3","part":"PN-1921","weight":960,"height":39,"level":2},{"pieceId":"2 of 3","part":"PN-1921","weight":900,"height":49,"level":3}]}]},"FOT03015F-M6":{"pieceIds":["1 of 10","2 of 10","3 of 10","4 of 10","5 of 10","6 of 10","7 of 10","8 of 10","9 of 10","10 of 10"],"stacks":[{"label":"Stack 1","width":90,"totalHeight":199,"totalWeight":6600,"members":[{"pieceId":"3 of 10","part":"PN-1001","weight":5000,"height":100,"level":1},{"pieceId":"4 of 10","part":"PN-1001","weight":1600,"height":99,"level":2}]},{"label":"Stack 2","width":90,"totalHeight":224,"totalWeight":4900,"members":[{"pieceId":"1 of 10","part":"PN-1001","weight":3300,"height":82,"level":1},{"pieceId":"6 of 10","part":"PN-1001","weight":580,"height":29,"level":2},{"pieceId":"8 of 10","part":"PN-1001","weight":520,"height":33,"level":3},{"pieceId":"7 of 10","part":"PN-1001","weight":500,"height":80,"level":4}]},{"label":"Stack 3","width":90,"totalHeight":101,"totalWeight":3420,"members":[{"pieceId":"2 of 10","part":"PN-1001","weight":3000,"height":66,"level":1},{"pieceId":"5 of 10","part":"PN-1001","weight":420,"height":35,"level":2}]},{"label":"Stack 4","width":48,"totalHeight":90,"totalWeight":280,"members":[{"pieceId":"9 of 10","part":"PN-1001","weight":280,"height":90,"level":1}]},{"label":"Stack 5","width":40,"totalHeight":57,"totalWeight":640,"members":[{"pieceId":"10 of 10","part":"PN-1001","weight":640,"height":57,"level":1}]}]},"MSCV84020MF-M8":{"pieceIds":["1 of 1"],"stacks":[]},"MSCVS44020MF-M4":{"pieceIds":["1 of 1"],"stacks":[]}},"crossStack":[{"label":"Cross-Stack 1","width":90,"totalHeight":93,"totalWeight":5600,"members":[{"pieceId":"MSCV84020MF-M8","part":"PN-1000","weight":5600,"height":93,"level":1}]},{"label":"Cross-Stack 2","width":90,"totalHeight":69,"totalWeight":3200,"members":[{"pieceId":"MSCVS44020MF-M4","part":"PN-51062","weight":3200,"height":69,"level":1}]}],"flatPieces":{"FOT03015F|1 of 6":{"serial":"FOT03015F","part":"PN-12969","pieceId":"1 of 6","length":202,"width":90,"height":88,"weight":4300,"stackable":"N","stackLabel":"Stack 1","level":1,"isBottom":true,"totalLevels":3,"totalHeight":226,"totalWeight":5900,"crossSystem":false},"FOT03015F|6 of 6":{"serial":"FOT03015F","part":"PN-12969","pieceId":"6 of 6","length":99,"width":90,"height":55,"weight":950,"stackable":"Y","stackLabel":"Stack 1","level":2,"isBottom":false,"totalLevels":3,"totalHeight":226,"totalWeight":5900,"crossSystem":false},"FOT03015F|4 of 6":{"serial":"FOT03015F","part":"PN-12969","pieceId":"4 of 6","length":103,"width":90,"height":83,"weight":650,"stackable":"Y","stackLabel":"Stack 1","level":3,"isBottom":false,"totalLevels":3,"totalHeight":226,"totalWeight":5900,"crossSystem":false},"FOT03015F|2 of 6":{"serial":"FOT03015F","part":"PN-12969","pieceId":"2 of 6","length":198,"width":90,"height":70,"weight":3600,"stackable":"N","stackLabel":"Stack 2","level":1,"isBottom":true,"totalLevels":2,"totalHeight":104,"totalWeight":4060,"crossSystem":false},"FOT03015F|5 of 6":{"serial":"FOT03015F","part":"PN-12969","pieceId":"5 of 6","length":97,"width":90,"height":34,"weight":460,"stackable":"Y","stackLabel":"Stack 2","level":2,"isBottom":false,"totalLevels":2,"totalHeight":104,"totalWeight":4060,"crossSystem":false},"FOT03015F|3 of 6":{"serial":"FOT03015F","part":"PN-12969","pieceId":"3 of 6","length":48,"width":48,"height":90,"weight":300,"stackable":"Y","stackLabel":"Stack 3","level":1,"isBottom":true,"totalLevels":1,"totalHeight":90,"totalWeight":300,"crossSystem":false},"SCV4020-10.5-K|1 of 2":{"serial":"SCV4020-10.5-K","part":"PN-60795","pieceId":"1 of 2","length":97,"width":90,"height":44,"weight":520,"stackable":"Y","stackLabel":"Stack 1","level":1,"isBottom":true,"totalLevels":1,"totalHeight":44,"totalWeight":520,"crossSystem":false},"SCV4020-10.5-K|2 of 2":{"serial":"SCV4020-10.5-K","part":"PN-60795","pieceId":"2 of 2","length":48,"width":44,"height":65,"weight":200,"stackable":"Y","stackLabel":"Stack 2","level":1,"isBottom":true,"totalLevels":1,"totalHeight":65,"totalWeight":200,"crossSystem":false},"MSCV84020XC3-M8H|1 of 12":{"serial":"MSCV84020XC3-M8H","part":"PN-13091","pieceId":"1 of 12","length":217,"width":90,"height":101,"weight":5000,"stackable":"N","stackLabel":"Stack 1","level":1,"isBottom":true,"totalLevels":2,"totalHeight":157,"totalWeight":6870,"crossSystem":false},"MSCV84020XC3-M8H|7 of 12":{"serial":"MSCV84020XC3-M8H","part":"PN-13091","pieceId":"7 of 12","length":194,"width":90,"height":56,"weight":1870,"stackable":"Y","stackLabel":"Stack 1","level":2,"isBottom":false,"totalLevels":2,"totalHeight":157,"totalWeight":6870,"crossSystem":false},"MSCV84020XC3-M8H|2 of 12":{"serial":"MSCV84020XC3-M8H","part":"PN-13091","pieceId":"2 of 12","length":217,"width":90,"height":101,"weight":4500,"stackable":"N","stackLabel":"Stack 2","level":1,"isBottom":true,"totalLevels":3,"totalHeight":205,"totalWeight":7000,"crossSystem":false},"MSCV84020XC3-M8H|3 of 12":{"serial":"MSCV84020XC3-M8H","part":"PN-13091","pieceId":"3 of 12","length":113,"width":90,"height":65,"weight":1800,"stackable":"Y","stackLabel":"Stack 2","level":2,"isBottom":false,"totalLevels":3,"totalHeight":205,"totalWeight":7000,"crossSystem":false},"MSCV84020XC3-M8H|9 of 12":{"serial":"MSCV84020XC3-M8H","part":"PN-13091","pieceId":"9 of 12","length":156,"width":90,"height":39,"weight":700,"stackable":"Y","stackLabel":"Stack 2","level":3,"isBottom":false,"totalLevels":3,"totalHeight":205,"totalWeight":7000,"crossSystem":false},"MSCV84020XC3-M8H|5 of 12":{"serial":"MSCV84020XC3-M8H","part":"PN-13091","pieceId":"5 of 12","length":181,"width":90,"height":80,"weight":3000,"stackable":"N","stackLabel":"Stack 3","level":1,"isBottom":true,"totalLevels":3,"totalHeight":221,"totalWeight":6450,"crossSystem":false},"MSCV84020XC3-M8H|4 of 12":{"serial":"MSCV84020XC3-M8H","part":"PN-13091","pieceId":"4 of 12","length":113,"width":90,"height":65,"weight":1750,"stackable":"Y","stackLabel":"Stack 3","level":2,"isBottom":false,"totalLevels":3,"totalHeight":221,"totalWeight":6450,"crossSystem":false},"MSCV84020XC3-M8H|8 of 12":{"serial":"MSCV84020XC3-M8H","part":"PN-13091","pieceId":"8 of 12","length":194,"width":90,"height":76,"weight":1700,"stackable":"Y","stackLabel":"Stack 3","level":3,"isBottom":false,"totalLevels":3,"totalHeight":221,"totalWeight":6450,"crossSystem":false},"MSCV84020XC3-M8H|6 of 12":{"serial":"MSCV84020XC3-M8H","part":"PN-13091","pieceId":"6 of 12","length":221,"width":90,"height":46,"weight":3000,"stackable":"N","stackLabel":"Stack 4","level":1,"isBottom":true,"totalLevels":3,"totalHeight":189,"totalWeight":5900,"crossSystem":false},"MSCV84020XC3-M8H|12 of 12":{"serial":"MSCV84020XC3-M8H","part":"PN-13091","pieceId":"12 of 12","length":110,"width":90,"height":55,"weight":1500,"stackable":"Y","stackLabel":"Stack 4","level":2,"isBottom":false,"totalLevels":3,"totalHeight":189,"totalWeight":5900,"crossSystem":false},"MSCV84020XC3-M8H|11 of 12":{"serial":"MSCV84020XC3-M8H","part":"PN-13091","pieceId":"11 of 12","length":104,"width":90,"height":88,"weight":1400,"stackable":"Y","stackLabel":"Stack 4","level":3,"isBottom":false,"totalLevels":3,"totalHeight":189,"totalWeight":5900,"crossSystem":false},"MSCV84020XC3-M8H|10 of 12":{"serial":"MSCV84020XC3-M8H","part":"PN-13091","pieceId":"10 of 12","length":56,"width":48,"height":90,"weight":380,"stackable":"Y","stackLabel":"Stack 5","level":1,"isBottom":true,"totalLevels":1,"totalHeight":90,"totalWeight":380,"crossSystem":false},"MSCV83015XC3-M8H|1 of 10":{"serial":"MSCV83015XC3-M8H","part":"PN-13064","pieceId":"1 of 10","length":172,"width":90,"height":100,"weight":4000,"stackable":"N","stackLabel":"Stack 1","level":1,"isBottom":true,"totalLevels":3,"totalHeight":237,"totalWeight":5700,"crossSystem":false},"MSCV83015XC3-M8H|3 of 10":{"serial":"MSCV83015XC3-M8H","part":"PN-13064","pieceId":"3 of 10","length":165,"width":90,"height":100,"weight":1300,"stackable":"Y","stackLabel":"Stack 1","level":2,"isBottom":false,"totalLevels":3,"totalHeight":237,"totalWeight":5700,"crossSystem":false},"MSCV83015XC3-M8H|5 of 10":{"serial":"MSCV83015XC3-M8H","part":"PN-13064","pieceId":"5 of 10","length":131,"width":90,"height":37,"weight":400,"stackable":"Y","stackLabel":"Stack 1","level":3,"isBottom":false,"totalLevels":3,"totalHeight":237,"totalWeight":5700,"crossSystem":false},"MSCV83015XC3-M8H|2 of 10":{"serial":"MSCV83015XC3-M8H","part":"PN-13064","pieceId":"2 of 10","length":174,"width":90,"height":79,"weight":4000,"stackable":"N","stackLabel":"Stack 2","level":1,"isBottom":true,"totalLevels":2,"totalHeight":155,"totalWeight":5200,"crossSystem":false},"MSCV83015XC3-M8H|9 of 10":{"serial":"MSCV83015XC3-M8H","part":"PN-13064","pieceId":"9 of 10","length":144,"width":90,"height":76,"weight":1200,"stackable":"Y","stackLabel":"Stack 2","level":2,"isBottom":false,"totalLevels":2,"totalHeight":155,"totalWeight":5200,"crossSystem":false},"MSCV83015XC3-M8H|4 of 10":{"serial":"MSCV83015XC3-M8H","part":"PN-13064","pieceId":"4 of 10","length":166,"width":90,"height":75,"weight":3000,"stackable":"N","stackLabel":"Stack 3","level":1,"isBottom":true,"totalLevels":2,"totalHeight":166,"totalWeight":4100,"crossSystem":false},"MSCV83015XC3-M8H|10 of 10":{"serial":"MSCV83015XC3-M8H","part":"PN-13064","pieceId":"10 of 10","length":125,"width":90,"height":91,"weight":1100,"stackable":"Y","stackLabel":"Stack 3","level":2,"isBottom":false,"totalLevels":2,"totalHeight":166,"totalWeight":4100,"crossSystem":false},"MSCV83015XC3-M8H|8 of 10":{"serial":"MSCV83015XC3-M8H","part":"PN-13064","pieceId":"8 of 10","length":171,"width":90,"height":48,"weight":2200,"stackable":"N","stackLabel":"Stack 4","level":1,"isBottom":true,"totalLevels":1,"totalHeight":48,"totalWeight":2200,"crossSystem":false},"MSCV83015XC3-M8H|7 of 10":{"serial":"MSCV83015XC3-M8H","part":"PN-13064","pieceId":"7 of 10","length":141,"width":90,"height":78,"weight":2000,"stackable":"N","stackLabel":"Stack 5","level":1,"isBottom":true,"totalLevels":1,"totalHeight":78,"totalWeight":2000,"crossSystem":false},"MSCV83015XC3-M8H|6 of 10":{"serial":"MSCV83015XC3-M8H","part":"PN-13064","pieceId":"6 of 10","length":48,"width":48,"height":91,"weight":300,"stackable":"Y","stackLabel":"Stack 6","level":1,"isBottom":true,"totalLevels":1,"totalHeight":91,"totalWeight":300,"crossSystem":false},"P94020GXF100-ST|1 of 3":{"serial":"P94020GXF100-ST","part":"PN-1921","pieceId":"1 of 3","length":242,"width":90,"height":77,"weight":2400,"stackable":"N","stackLabel":"Stack 1","level":1,"isBottom":true,"totalLevels":3,"totalHeight":165,"totalWeight":4260,"crossSystem":false},"P94020GXF100-ST|3 of 3":{"serial":"P94020GXF100-ST","part":"PN-1921","pieceId":"3 of 3","length":101,"width":90,"height":39,"weight":960,"stackable":"Y","stackLabel":"Stack 1","level":2,"isBottom":false,"totalLevels":3,"totalHeight":165,"totalWeight":4260,"crossSystem":false},"P94020GXF100-ST|2 of 3":{"serial":"P94020GXF100-ST","part":"PN-1921","pieceId":"2 of 3","length":124,"width":90,"height":49,"weight":900,"stackable":"Y","stackLabel":"Stack 1","level":3,"isBottom":false,"totalLevels":3,"totalHeight":165,"totalWeight":4260,"crossSystem":false},"FOT03015F-M6|3 of 10":{"serial":"FOT03015F-M6","part":"PN-1001","pieceId":"3 of 10","length":206,"width":90,"height":100,"weight":5000,"stackable":"N","stackLabel":"Stack 1","level":1,"isBottom":true,"totalLevels":2,"totalHeight":199,"totalWeight":6600,"crossSystem":false},"FOT03015F-M6|4 of 10":{"serial":"FOT03015F-M6","part":"PN-1001","pieceId":"4 of 10","length":164,"width":90,"height":99,"weight":1600,"stackable":"Y","stackLabel":"Stack 1","level":2,"isBottom":false,"totalLevels":2,"totalHeight":199,"totalWeight":6600,"crossSystem":false},"FOT03015F-M6|1 of 10":{"serial":"FOT03015F-M6","part":"PN-1001","pieceId":"1 of 10","length":176,"width":90,"height":82,"weight":3300,"stackable":"N","stackLabel":"Stack 2","level":1,"isBottom":true,"totalLevels":4,"totalHeight":224,"totalWeight":4900,"crossSystem":false},"FOT03015F-M6|6 of 10":{"serial":"FOT03015F-M6","part":"PN-1001","pieceId":"6 of 10","length":106,"width":90,"height":29,"weight":580,"stackable":"Y","stackLabel":"Stack 2","level":2,"isBottom":false,"totalLevels":4,"totalHeight":224,"totalWeight":4900,"crossSystem":false},"FOT03015F-M6|8 of 10":{"serial":"FOT03015F-M6","part":"PN-1001","pieceId":"8 of 10","length":97,"width":90,"height":33,"weight":520,"stackable":"Y","stackLabel":"Stack 2","level":3,"isBottom":false,"totalLevels":4,"totalHeight":224,"totalWeight":4900,"crossSystem":false},"FOT03015F-M6|7 of 10":{"serial":"FOT03015F-M6","part":"PN-1001","pieceId":"7 of 10","length":104,"width":90,"height":80,"weight":500,"stackable":"Y","stackLabel":"Stack 2","level":4,"isBottom":false,"totalLevels":4,"totalHeight":224,"totalWeight":4900,"crossSystem":false},"FOT03015F-M6|2 of 10":{"serial":"FOT03015F-M6","part":"PN-1001","pieceId":"2 of 10","length":198,"width":90,"height":66,"weight":3000,"stackable":"N","stackLabel":"Stack 3","level":1,"isBottom":true,"totalLevels":2,"totalHeight":101,"totalWeight":3420,"crossSystem":false},"FOT03015F-M6|5 of 10":{"serial":"FOT03015F-M6","part":"PN-1001","pieceId":"5 of 10","length":117,"width":90,"height":35,"weight":420,"stackable":"Y","stackLabel":"Stack 3","level":2,"isBottom":false,"totalLevels":2,"totalHeight":101,"totalWeight":3420,"crossSystem":false},"FOT03015F-M6|9 of 10":{"serial":"FOT03015F-M6","part":"PN-1001","pieceId":"9 of 10","length":48,"width":48,"height":90,"weight":280,"stackable":"Y","stackLabel":"Stack 4","level":1,"isBottom":true,"totalLevels":1,"totalHeight":90,"totalWeight":280,"crossSystem":false},"FOT03015F-M6|10 of 10":{"serial":"FOT03015F-M6","part":"PN-1001","pieceId":"10 of 10","length":72,"width":40,"height":57,"weight":640,"stackable":"Y","stackLabel":"Stack 5","level":1,"isBottom":true,"totalLevels":1,"totalHeight":57,"totalWeight":640,"crossSystem":false},"MSCV84020MF-M8|1 of 1":{"serial":"MSCV84020MF-M8","part":"PN-1000","pieceId":"1 of 1","length":228,"width":90,"height":93,"weight":5600,"stackable":"N","stackLabel":"Cross-Stack 1","level":1,"isBottom":true,"totalLevels":1,"totalHeight":93,"totalWeight":5600,"crossSystem":true},"MSCVS44020MF-M4|1 of 1":{"serial":"MSCVS44020MF-M4","part":"PN-51062","pieceId":"1 of 1","length":216,"width":90,"height":69,"weight":3200,"stackable":"N","stackLabel":"Cross-Stack 2","level":1,"isBottom":true,"totalLevels":1,"totalHeight":69,"totalWeight":3200,"crossSystem":true}}}
+;
+
+/* ================= Persistent storage (this device only) ================= */
+const STORAGE_KEY = 'materialHandlingData_v1';
+
+function loadData() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) return JSON.parse(saved);
+  } catch (e) { /* fall through to seed */ }
+  return JSON.parse(JSON.stringify(SEED_DATA));
+}
+
+function saveData() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA));
+    return true;
+  } catch (e) {
+    console.error('Could not save to this device:', e);
+    return false;
+  }
+}
+
+let DATA = loadData();
+
+const systemSelect = document.getElementById('systemSelect');
+const pieceSelect = document.getElementById('pieceSelect');
+const resultArea = document.getElementById('resultArea');
+const scanBtn = document.getElementById('scanBtn');
+
+function populateSystemDropdown() {
+  const currentVal = systemSelect.value;
+  systemSelect.innerHTML = '<option value="">Select a system…</option>';
+  Object.keys(DATA.systems).sort().forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s; opt.textContent = s;
+    systemSelect.appendChild(opt);
+  });
+  if (currentVal && DATA.systems[currentVal]) systemSelect.value = currentVal;
+}
+populateSystemDropdown();
+
+systemSelect.addEventListener('change', () => {
+  const serial = systemSelect.value;
+  pieceSelect.innerHTML = '';
+  resultArea.innerHTML = '';
+  if (!serial) {
+    pieceSelect.disabled = true;
+    pieceSelect.innerHTML = '<option value="">Select a system first…</option>';
+    return;
+  }
+  pieceSelect.disabled = false;
+  const placeholder = document.createElement('option');
+  placeholder.value = ''; placeholder.textContent = 'Select a piece…';
+  pieceSelect.appendChild(placeholder);
+  DATA.systems[serial].pieceIds.forEach(pid => {
+    const opt = document.createElement('option');
+    opt.value = pid; opt.textContent = pid;
+    pieceSelect.appendChild(opt);
+  });
+});
+
+pieceSelect.addEventListener('change', () => {
+  const serial = systemSelect.value;
+  const pieceId = pieceSelect.value;
+  if (!serial || !pieceId) { resultArea.innerHTML = ''; return; }
+  renderResult(serial, pieceId);
+});
+
+scanBtn.addEventListener('click', () => {
+  const keys = Object.keys(DATA.flatPieces);
+  const randomKey = keys[Math.floor(Math.random() * keys.length)];
+  const [serial, pieceId] = [DATA.flatPieces[randomKey].serial, DATA.flatPieces[randomKey].pieceId];
+  systemSelect.value = serial;
+  systemSelect.dispatchEvent(new Event('change'));
+  pieceSelect.value = pieceId;
+  renderResult(serial, pieceId);
+});
+
+function renderResult(serial, pieceId) {
+  const key = serial + '|' + pieceId;
+  const p = DATA.flatPieces[key];
+  if (!p) {
+    resultArea.innerHTML = `
+      <div class="card">
+        <div class="empty-note">
+          <span class="hi">NOT FOUND IN TEMPLATES.</span><br>
+          This piece hasn’t been stacked before.<br>
+          Measure it, weigh it, and send it back to the office to compute a plan.
+        </div>
+      </div>`;
+    return;
+  }
+
+  const isBase = p.stackable === 'N';
+  const headline = p.isBottom
+    ? `${p.stackLabel}<br><span class="accent">GROUND LEVEL</span>`
+    : `${p.stackLabel}<br><span class="accent">Level ${p.level}</span>`;
+
+  let caution = '';
+  if (isBase) {
+    caution = `
+      <div class="caution">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFD9C4" stroke-width="2.2"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
+        <div class="caution-text">Base piece &mdash; cannot be placed on top of anything. Other pieces can be stacked on it.</div>
+      </div>`;
+  }
+
+  let members = [];
+  if (p.crossSystem) {
+    const cs = DATA.crossStack.find(s => s.label === p.stackLabel);
+    if (cs) members = cs.members;
+  } else {
+    const sysData = DATA.systems[serial];
+    const st = sysData.stacks.find(s => s.label === p.stackLabel);
+    if (st) members = st.members;
+  }
+
+  const levelRows = members.slice().reverse().map(m => {
+    const isCurrent = m.pieceId === pieceId;
+    return `
+      <div class="level-row ${isCurrent ? 'current' : ''}">
+        <div class="level-num">L${m.level}</div>
+        <div class="level-info">${m.pieceId}${m.level === 1 ? ' (bottom)' : ''}</div>
+        <div class="level-weight">${m.weight} kg</div>
+        ${isCurrent ? '<span class="level-tag-you">YOU</span>' : ''}
+      </div>`;
+  }).join('');
+
+  resultArea.innerHTML = `
+    <div class="plate-wrap">
+      <div class="plate">
+        <div class="rivet tl"></div><div class="rivet tr"></div>
+        <div class="rivet bl"></div><div class="rivet br"></div>
+        <div class="plate-sub">${serial} &middot; Piece ${pieceId}</div>
+        <div class="plate-headline">${headline}</div>
+        <div class="plate-tag">Part ${p.part}</div>
+        ${caution}
+        <div class="stats">
+          <div class="stat"><div class="stat-label">Weight</div><div class="stat-value">${p.weight}<span style="font-size:11px">kg</span></div></div>
+          <div class="stat"><div class="stat-label">Footprint</div><div class="stat-value">${p.width}"</div></div>
+          <div class="stat"><div class="stat-label">Height</div><div class="stat-value">${p.height}"</div></div>
+        </div>
+        <div class="stack-diagram">
+          <div class="stack-diagram-label">Full Stack &middot; ${p.totalHeight}in tall &middot; ${p.totalWeight}kg total</div>
+          ${levelRows}
+        </div>
+      </div>
+    </div>`;
+}
+
+/* ================= Tab switching ================= */
+const tabLookupBtn = document.getElementById('tabLookupBtn');
+const tabOutboundBtn = document.getElementById('tabOutboundBtn');
+const tabAddBtn = document.getElementById('tabAddBtn');
+const lookupView = document.getElementById('lookupView');
+const outboundView = document.getElementById('outboundView');
+const addView = document.getElementById('addView');
+const pageTitle = document.getElementById('pageTitle');
+const pageFooter = document.getElementById('pageFooter');
+
+const FOOTER_TEXT = {
+  lookup: 'SAME SERIAL &middot; DECREASE WEIGHT UP &middot; STAY UNDER 240 IN',
+  outbound: '102IN WIDE &middot; 96IN FLATBED &middot; 118IN STEP DECK BOTTOM',
+  add: 'SAVED TO THIS DEVICE ONLY &middot; NOT SYNCED TO OTHER TABLETS'
+};
+const TITLE_TEXT = { lookup: 'Stack Lookup', outbound: 'Outbound Planner', add: 'Add Inventory' };
+
+function switchTab(tab) {
+  tabLookupBtn.classList.toggle('active', tab === 'lookup');
+  tabOutboundBtn.classList.toggle('active', tab === 'outbound');
+  tabAddBtn.classList.toggle('active', tab === 'add');
+  lookupView.style.display = tab === 'lookup' ? '' : 'none';
+  outboundView.style.display = tab === 'outbound' ? '' : 'none';
+  addView.style.display = tab === 'add' ? '' : 'none';
+  pageTitle.textContent = TITLE_TEXT[tab];
+  pageFooter.innerHTML = FOOTER_TEXT[tab];
+}
+tabLookupBtn.addEventListener('click', () => switchTab('lookup'));
+tabOutboundBtn.addEventListener('click', () => switchTab('outbound'));
+tabAddBtn.addEventListener('click', () => { populateSerialDatalist(); switchTab('add'); });
+
+/* ================= Outbound Planner ================= */
+const STEPDECK_TOP_LEN = 120;
+const BOTTOM_LEN_48 = 456, BOTTOM_LEN_53 = 516;
+const FLATBED_LEN_48 = 576, FLATBED_LEN_53 = 636;
+const OPEN_HEIGHT_CAP = 118;
+
+// Build per-system summary (piece count, total weight) from flatPieces
+function computeSystemSummary() {
+  const summary = {};
+  Object.values(DATA.flatPieces).forEach(p => {
+    if (!summary[p.serial]) summary[p.serial] = { count: 0, weight: 0 };
+    summary[p.serial].count += 1;
+    summary[p.serial].weight += p.weight;
+  });
+  return summary;
+}
+
+const checklistEl = document.getElementById('systemChecklist');
+const computeBtn = document.getElementById('computeBtn');
+const outboundResult = document.getElementById('outboundResult');
+
+function populateChecklist() {
+  const previouslyChecked = new Set(
+    Array.from(checklistEl.querySelectorAll('input:checked')).map(cb => cb.value)
+  );
+  checklistEl.innerHTML = '';
+  const systemSummary = computeSystemSummary();
+  Object.keys(systemSummary).sort().forEach(serial => {
+    const s = systemSummary[serial];
+    const row = document.createElement('label');
+    row.className = 'check-row';
+    row.innerHTML = `
+      <input type="checkbox" value="${serial}">
+      <div class="check-row-info">
+        <div class="check-row-serial">${serial}</div>
+        <div class="check-row-meta">${s.count} piece${s.count === 1 ? '' : 's'} &middot; ${s.weight} kg total</div>
+      </div>`;
+    const cb = row.querySelector('input');
+    if (previouslyChecked.has(serial)) { cb.checked = true; row.classList.add('checked'); }
+    cb.addEventListener('change', () => {
+      row.classList.toggle('checked', cb.checked);
+      const anyChecked = checklistEl.querySelectorAll('input:checked').length > 0;
+      computeBtn.disabled = !anyChecked;
+    });
+    checklistEl.appendChild(row);
+  });
+  computeBtn.disabled = checklistEl.querySelectorAll('input:checked').length === 0;
+}
+populateChecklist();
+
+function packFlatbeds(pieces, trailerLen) {
+  const remaining = [...pieces].sort((a, b) => b.length - a.length);
+  const trailers = [];
+  remaining.forEach(p => {
+    let placed = false;
+    for (const t of trailers) {
+      if (t.used + p.length <= trailerLen) { t.items.push(p); t.used += p.length; placed = true; break; }
+    }
+    if (!placed) trailers.push({ items: [p], used: p.length });
+  });
+  return trailers;
+}
+
+function packStepdecks(tall, short, bottomLen) {
+  const trailers = [];
+  [...tall].sort((a, b) => b.length - a.length).forEach(p => {
+    let placed = false;
+    for (const t of trailers) {
+      if (t.bottomUsed + p.length <= bottomLen) { t.bottom.push(p); t.bottomUsed += p.length; placed = true; break; }
+    }
+    if (!placed) trailers.push({ bottom: [p], bottomUsed: p.length, top: [], topUsed: 0 });
+  });
+  [...short].sort((a, b) => b.length - a.length).forEach(p => {
+    let placed = false;
+    for (const t of trailers) {
+      if (t.topUsed + p.length <= STEPDECK_TOP_LEN) { t.top.push(p); t.topUsed += p.length; placed = true; break; }
+    }
+    if (!placed) {
+      for (const t of trailers) {
+        if (t.bottomUsed + p.length <= bottomLen) { t.bottom.push(p); t.bottomUsed += p.length; placed = true; break; }
+      }
+    }
+    if (!placed) {
+      if (p.length <= STEPDECK_TOP_LEN) trailers.push({ bottom: [], bottomUsed: 0, top: [p], topUsed: p.length });
+      else if (p.length <= bottomLen) trailers.push({ bottom: [p], bottomUsed: p.length, top: [], topUsed: 0 });
+      else trailers.push({ bottom: [], bottomUsed: 0, top: [], topUsed: 0, oversized: [p] });
+    }
+  });
+  return trailers;
+}
+
+function cargoRow(p) {
+  return `
+    <div class="cargo-row">
+      <span class="serial-tag">${p.serial}</span>
+      <span class="piece-name">${p.pieceId}</span>
+      <span class="piece-len">${p.length}"</span>
+    </div>`;
+}
+
+function gauge(used, cap, label) {
+  const pct = Math.min(100, Math.round((used / cap) * 100));
+  return `
+    <div class="gauge-label"><span>${label}</span><span>${used}IN / ${cap}IN</span></div>
+    <div class="gauge"><div class="gauge-fill" style="width:${pct}%"></div></div>`;
+}
+
+computeBtn.addEventListener('click', () => {
+  const selected = Array.from(checklistEl.querySelectorAll('input:checked')).map(cb => cb.value);
+  const pieces = Object.values(DATA.flatPieces).filter(p => selected.includes(p.serial));
+  if (pieces.length === 0) { outboundResult.innerHTML = ''; return; }
+
+  const totalWeight = pieces.reduce((s, p) => s + p.weight, 0);
+  const maxH = Math.max(...pieces.map(p => p.height));
+  const over = pieces.filter(p => p.height > OPEN_HEIGHT_CAP);
+
+  const summaryHtml = `
+    <div class="shipment-summary">
+      <div class="stat"><div class="stat-label">Systems</div><div class="stat-value">${selected.length}</div></div>
+      <div class="stat"><div class="stat-label">Pieces</div><div class="stat-value">${pieces.length}</div></div>
+      <div class="stat"><div class="stat-label">Weight</div><div class="stat-value">${totalWeight}<span style="font-size:10px">kg</span></div></div>
+      <div class="stat"><div class="stat-label">Tallest</div><div class="stat-value">${maxH}"</div></div>
+    </div>`;
+
+  if (over.length > 0) {
+    outboundResult.innerHTML = summaryHtml + `
+      <div class="caution" style="margin-top:0">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFD9C4" stroke-width="2.2"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
+        <div class="caution-text">OPEN TRAILER REQUIRED &mdash; ${over.map(p => p.serial + ' ' + p.pieceId).join(', ')} exceed 118in and can't ride under any Conestoga tarp.</div>
+      </div>`;
+    return;
+  }
+
+  const tall = pieces.filter(p => p.height > 96 && p.height <= 118);
+  const short = pieces.filter(p => p.height <= 96);
+
+  let trucksHtml = '';
+
+  if (tall.length === 0) {
+    const totalLen = pieces.reduce((s, p) => s + p.length, 0);
+    let trailers;
+    let trailerLabel;
+    if (totalLen <= FLATBED_LEN_48) {
+      trailers = [{ items: pieces, used: totalLen }];
+      trailerLabel = 'Flatbed Conestoga · 48ft';
+    } else {
+      trailers = packFlatbeds(pieces, FLATBED_LEN_53);
+      trailerLabel = 'Flatbed Conestoga · 53ft';
+    }
+    trailers.forEach((t, i) => {
+      trucksHtml += `
+        <div class="truck-card">
+          <div class="truck-head">
+            <div class="truck-num">Truck ${i + 1}</div>
+            <div class="truck-type">${trailerLabel}</div>
+          </div>
+          ${gauge(t.used, totalLen <= FLATBED_LEN_48 ? FLATBED_LEN_48 : FLATBED_LEN_53, 'Deck length used')}
+          ${t.items.map(cargoRow).join('')}
+        </div>`;
+    });
+  } else {
+    const tallLen = tall.reduce((s, p) => s + p.length, 0);
+    const shortLen = short.reduce((s, p) => s + p.length, 0);
+    let bottomLen, label;
+    if (tallLen <= BOTTOM_LEN_48 && (BOTTOM_LEN_48 - tallLen + STEPDECK_TOP_LEN) >= shortLen) {
+      bottomLen = BOTTOM_LEN_48; label = 'Step Deck Conestoga · 48ft';
+    } else {
+      bottomLen = BOTTOM_LEN_53; label = 'Step Deck Conestoga · 53ft';
+    }
+    const trailers = packStepdecks(tall, short, bottomLen);
+    trailers.forEach((t, i) => {
+      trucksHtml += `
+        <div class="truck-card">
+          <div class="truck-head">
+            <div class="truck-num">Truck ${i + 1}</div>
+            <div class="truck-type">${label}</div>
+          </div>
+          ${gauge(t.bottomUsed, bottomLen, 'Bottom deck (max 118in)')}
+          ${t.bottom.map(cargoRow).join('')}
+          ${t.top.length ? '<div class="deck-label">Top deck (max 96in)</div>' + gauge(t.topUsed, STEPDECK_TOP_LEN, 'Top deck used') + t.top.map(cargoRow).join('') : ''}
+          ${t.oversized ? `<div class="caution"><div class="caution-text">FLAG &mdash; ${t.oversized.map(p=>p.serial+' '+p.pieceId).join(', ')} too long for either deck section alone</div></div>` : ''}
+        </div>`;
+    });
+  }
+
+  outboundResult.innerHTML = summaryHtml + `<div style="margin-top:4px">${trucksHtml}</div>`;
+});
+
+/* ================= Add Inventory ================= */
+const MAX_HEIGHT = 240;
+const MAX_STACK_WEIGHT = 2000;
+const MAX_TOTAL_STACK_WEIGHT = 7000;
+const WEIGHT_TOLERANCE = 0.10;
+
+// Same warehouse stacking logic used to build Templates originally - ported so new
+// pieces entered on this device get a real computed Stack Position, not a guess.
+function buildStacks(pieces) {
+  const footprintGroups = {};
+  pieces.forEach(p => {
+    if (!footprintGroups[p.width]) footprintGroups[p.width] = [];
+    footprintGroups[p.width].push(p);
+  });
+  const allStacks = [];
+  Object.keys(footprintGroups).forEach(widthKey => {
+    const width = Number(widthKey);
+    let remaining = [...footprintGroups[widthKey]].sort((a, b) => b.weight - a.weight);
+    while (remaining.length > 0) {
+      const base = remaining.shift();
+      const stack = [base];
+      let cumHeight = base.height, cumWeight = base.weight, topWeight = base.weight;
+      let i = 0;
+      while (i < remaining.length) {
+        const c = remaining[i];
+        const eligible = c.stackable === 'Y' && c.weight <= MAX_STACK_WEIGHT;
+        const fitsWeightOrder = c.weight <= topWeight * (1 + WEIGHT_TOLERANCE);
+        const fitsHeight = (cumHeight + c.height) <= MAX_HEIGHT;
+        const fitsTotalWeight = (cumWeight + c.weight) <= MAX_TOTAL_STACK_WEIGHT;
+        if (eligible && fitsWeightOrder && fitsHeight && fitsTotalWeight) {
+          stack.push(c);
+          cumHeight += c.height; cumWeight += c.weight; topWeight = c.weight;
+          remaining.splice(i, 1);
+        } else { i++; }
+      }
+      allStacks.push({ width, stack, totalHeight: cumHeight, totalWeight: cumWeight });
+    }
+  });
+  return allStacks;
+}
+
+function recomputeSystem(serial) {
+  const piecesForSerial = Object.values(DATA.flatPieces).filter(p => p.serial === serial);
+  const nonSolo = piecesForSerial.filter(p => p.pieceId !== '1 of 1');
+  const stacks = buildStacks(nonSolo);
+  const stackList = stacks.map((s, idx) => {
+    const label = `Stack ${idx + 1}`;
+    const members = s.stack.map((p, i) => ({ pieceId: p.pieceId, part: p.part, weight: p.weight, height: p.height, level: i + 1 }));
+    return { label, width: s.width, totalHeight: s.totalHeight, totalWeight: s.totalWeight, members };
+  });
+  stackList.forEach(s => {
+    s.members.forEach(m => {
+      const key = serial + '|' + m.pieceId;
+      DATA.flatPieces[key] = Object.assign({}, DATA.flatPieces[key], {
+        stackLabel: s.label, level: m.level, isBottom: m.level === 1,
+        totalLevels: s.members.length, totalHeight: s.totalHeight, totalWeight: s.totalWeight, crossSystem: false
+      });
+    });
+  });
+  DATA.systems[serial] = { pieceIds: piecesForSerial.map(p => p.pieceId), stacks: stackList };
+}
+
+function recomputeCrossStack() {
+  const soloPieces = Object.values(DATA.flatPieces).filter(p => p.pieceId === '1 of 1');
+  const stacks = buildStacks(soloPieces);
+  const crossList = stacks.map((s, idx) => {
+    const label = `Cross-Stack ${idx + 1}`;
+    const members = s.stack.map((p, i) => ({ pieceId: p.serial, part: p.part, weight: p.weight, height: p.height, level: i + 1 }));
+    return { label, width: s.width, totalHeight: s.totalHeight, totalWeight: s.totalWeight, members };
+  });
+  DATA.crossStack = crossList;
+  crossList.forEach(s => {
+    s.members.forEach(m => {
+      const key = m.pieceId + '|1 of 1'; // m.pieceId holds the serial for cross-stack members
+      DATA.flatPieces[key] = Object.assign({}, DATA.flatPieces[key], {
+        stackLabel: s.label, level: m.level, isBottom: m.level === 1,
+        totalLevels: s.members.length, totalHeight: s.totalHeight, totalWeight: s.totalWeight, crossSystem: true
+      });
+    });
+  });
+}
+
+function populateSerialDatalist() {
+  const dl = document.getElementById('serialList');
+  dl.innerHTML = '';
+  Object.keys(DATA.systems).sort().forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s;
+    dl.appendChild(opt);
+  });
+}
+populateSerialDatalist();
+
+const addError = document.getElementById('addError');
+const addResult = document.getElementById('addResult');
+
+function addFieldValue(id) { return document.getElementById(id).value.trim(); }
+
+document.getElementById('saveBtn').addEventListener('click', () => {
+  const serial = addFieldValue('addSerial');
+  const part = addFieldValue('addPart');
+  const pieceId = addFieldValue('addPieceId');
+  const length = Number(addFieldValue('addLength'));
+  const width = Number(addFieldValue('addWidth'));
+  const height = Number(addFieldValue('addHeight'));
+  const weight = Number(addFieldValue('addWeight'));
+  const stackable = document.getElementById('addStackable').value;
+
+  const missing = [];
+  if (!serial) missing.push('Serial Number');
+  if (!part) missing.push('Part Number');
+  if (!pieceId) missing.push('Piece ID');
+  if (!length || length <= 0) missing.push('Length');
+  if (!width || width <= 0) missing.push('Width');
+  if (!height || height <= 0) missing.push('Height');
+  if (!weight || weight <= 0) missing.push('Weight');
+
+  if (missing.length > 0) {
+    addError.style.display = 'block';
+    addError.textContent = 'Missing or invalid: ' + missing.join(', ');
+    return;
+  }
+  addError.style.display = 'none';
+
+  const key = serial + '|' + pieceId;
+  DATA.flatPieces[key] = {
+    serial, part, pieceId, length, width, height, weight, stackable,
+    stackLabel: '', level: 0, isBottom: false, totalLevels: 0, totalHeight: 0, totalWeight: 0,
+    crossSystem: pieceId === '1 of 1'
+  };
+  if (!DATA.systems[serial]) DATA.systems[serial] = { pieceIds: [], stacks: [] };
+  if (!DATA.systems[serial].pieceIds.includes(pieceId)) DATA.systems[serial].pieceIds.push(pieceId);
+
+  if (pieceId === '1 of 1') {
+    recomputeCrossStack();
+  } else {
+    recomputeSystem(serial);
+  }
+
+  const saved = saveData();
+  populateSystemDropdown();
+  populateChecklist();
+  populateSerialDatalist();
+
+  const p = DATA.flatPieces[key];
+  const headline = p.isBottom
+    ? `${p.stackLabel}<br><span class="accent">GROUND LEVEL</span>`
+    : `${p.stackLabel}<br><span class="accent">Level ${p.level}</span>`;
+
+  addResult.innerHTML = `
+    <div class="plate-wrap">
+      <div class="plate">
+        <div class="rivet tl"></div><div class="rivet tr"></div>
+        <div class="rivet bl"></div><div class="rivet br"></div>
+        <div class="plate-sub">${saved ? 'SAVED TO THIS DEVICE' : 'COMPUTED (NOT SAVED - STORAGE UNAVAILABLE)'}</div>
+        <div class="plate-sub" style="margin-top:8px">${serial} &middot; Piece ${pieceId}</div>
+        <div class="plate-headline">${headline}</div>
+        <div class="plate-tag">Part ${part}</div>
+        <div class="stats">
+          <div class="stat"><div class="stat-label">Weight</div><div class="stat-value">${weight}<span style="font-size:11px">kg</span></div></div>
+          <div class="stat"><div class="stat-label">Footprint</div><div class="stat-value">${width}"</div></div>
+          <div class="stat"><div class="stat-label">Height</div><div class="stat-value">${height}"</div></div>
+        </div>
+      </div>
+    </div>`;
+
+  ['addSerial','addPart','addPieceId','addLength','addWidth','addHeight','addWeight'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  if (document.getElementById('invTableWrap').style.display !== 'none') renderInventoryTable();
+});
+
+document.getElementById('resetBtn').addEventListener('click', () => {
+  if (!confirm('This clears every piece added on this device and restores the original data. Continue?')) return;
+  DATA = JSON.parse(JSON.stringify(SEED_DATA));
+  saveData();
+  populateSystemDropdown();
+  populateChecklist();
+  populateSerialDatalist();
+  addResult.innerHTML = '';
+  outboundResult.innerHTML = '';
+  resultArea.innerHTML = '';
+  if (document.getElementById('invTableWrap').style.display !== 'none') renderInventoryTable();
+});
+
+/* ================= Inventory viewer ================= */
+function csvEscape(v) {
+  return '"' + String(v).replace(/"/g, '""') + '"';
+}
+
+function renderInventoryTable() {
+  const rows = Object.values(DATA.flatPieces).sort((a, b) => {
+    if (a.serial !== b.serial) return a.serial.localeCompare(b.serial);
+    return a.pieceId.localeCompare(b.pieceId, undefined, { numeric: true });
+  });
+
+  document.getElementById('invTableBody').innerHTML = rows.map(p => `
+    <tr>
+      <td>${p.serial}</td><td>${p.part}</td><td>${p.pieceId}</td>
+      <td>${p.length}</td><td>${p.width}</td><td>${p.height}</td><td>${p.weight}</td>
+      <td>${p.stackable}</td><td>${p.stackLabel}${p.level ? ' L' + p.level : ''}</td>
+    </tr>`).join('');
+
+  document.getElementById('invCount').textContent =
+    rows.length + ' piece' + (rows.length === 1 ? '' : 's') + ' across ' + Object.keys(DATA.systems).length + ' systems';
+
+  const header = ['Serial Number','Part Number','Piece ID','Length (in)','Width (in)','Height (in)','Weight (kg)','Stackable','Stack Position'];
+  const csvLines = [header.map(csvEscape).join(',')];
+  rows.forEach(p => {
+    csvLines.push([
+      p.serial, p.part, p.pieceId, p.length, p.width, p.height, p.weight, p.stackable,
+      p.stackLabel + (p.level ? ' Level ' + p.level : '')
+    ].map(csvEscape).join(','));
+  });
+  document.getElementById('csvOutput').value = csvLines.join('\n');
+}
+
+document.getElementById('toggleInvBtn').addEventListener('click', () => {
+  const wrap = document.getElementById('invTableWrap');
+  const btn = document.getElementById('toggleInvBtn');
+  const hidden = wrap.style.display === 'none';
+  if (hidden) {
+    renderInventoryTable();
+    wrap.style.display = 'block';
+    btn.textContent = 'Hide Inventory List';
+  } else {
+    wrap.style.display = 'none';
+    btn.textContent = 'View All Inventory';
+  }
+});
+
+document.getElementById('copyCsvBtn').addEventListener('click', () => {
+  const ta = document.getElementById('csvOutput');
+  ta.focus();
+  ta.select();
+  ta.setSelectionRange(0, 999999);
+  let copied = false;
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(ta.value);
+      copied = true;
+    }
+  } catch (e) { /* fall through */ }
+  if (!copied) {
+    try { copied = document.execCommand('copy'); } catch (e) { /* fall through */ }
+  }
+  const status = document.getElementById('copyStatus');
+  status.textContent = copied ? 'Copied to clipboard.' : 'Copy failed — select the text above and press Ctrl/Cmd+C.';
+  setTimeout(() => { status.textContent = ''; }, 3500);
+});
+</script>
+</body>
+</html>
